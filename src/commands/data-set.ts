@@ -56,6 +56,7 @@ addMetadataOptions(dataSetListCommand, { includePieceMetadata: false, includeDat
 export const dataSetTerminateCommand = new Command('terminate')
   .description('Terminate a data set and associated payment rails')
   .argument('<dataSetId>', 'Data set ID to terminate')
+  .option('--wait', 'Wait for the termination transaction to be confirmed')
   .action(async (dataSetId: string, options) => {
     try {
       const commandOptions: DataSetCommandOptions = {

@@ -208,6 +208,7 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
     }
     log.flush()
 
+    let shouldWait = options.wait
     if (isInteractive()) {
       spinner.stop()
       const proceed = await confirm({
@@ -222,6 +223,17 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
         cancel('Termination cancelled by user')
         throw new Error('Termination cancelled by user')
       }
+
+      if (shouldWait === undefined) {
+        const waitConfirm = await confirm({
+          message: 'Wait for the termination transaction to be fully confirmed?',
+          initialValue: true,
+        })
+        if (!isCancel(waitConfirm)) {
+          shouldWait = waitConfirm
+        }
+      }
+
       spinner.start('Terminating data set...')
       spinner.message('Terminating data set...')
     }
@@ -238,13 +250,40 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
       throw serviceError
     }
 
-    let txResponse: { hash: string; blockNumber?: number | null }
     let txHash: string
+    let txResponse: any
     try {
       const signer = synapse.getSigner()
+      const provider = synapse.getProvider()
       spinner.message('Submitting termination transaction...')
       txResponse = await warmStorageService.terminateDataSet(signer, dataSetId)
       txHash = txResponse.hash
+
+      if (shouldWait) {
+        spinner.message(`Waiting for confirmation: ${txHash}...`)
+        await provider.waitForTransaction(txHash)
+        spinner.message('Transaction confirmed, fetching final status...')
+        try {
+          const finalDataSet = await getDetailedDataSet(synapse, dataSetId)
+          dataSet = {
+            ...finalDataSet,
+            isLive: finalDataSet.isLive,
+            pdpEndEpoch: finalDataSet.pdpEndEpoch,
+          }
+        } catch (_) {
+          dataSet = {
+            ...dataSet,
+            isLive: false,
+            pdpEndEpoch: txResponse.blockNumber != null ? Math.ceil(txResponse.blockNumber / 32) : 0,
+          }
+        }
+      } else {
+        dataSet = {
+          ...dataSet,
+          isLive: false,
+          pdpEndEpoch: txResponse.blockNumber != null ? Math.ceil(txResponse.blockNumber / 32) : 0,
+        }
+      }
     } catch (error) {
       spinner.stop(`${pc.red('✗')} Failed to submit termination transaction`)
       log.line('')
@@ -254,20 +293,22 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
       throw error
     }
 
-    const updatedDataSet = {
-      ...dataSet,
-      isLive: false,
-      pdpEndEpoch: txResponse.blockNumber != null ? Math.ceil(txResponse.blockNumber / 32) : 0,
+    if (shouldWait) {
+      spinner.stop(`${pc.green('✓')} Data set termination confirmed: ${txHash}`)
+    } else {
+      spinner.stop(`Transaction submitted: ${txHash}`)
+      log.line('')
+      log.line(
+        pc.yellow('Note: The transaction is pending. It may take a few moments for the status to update on-chain.')
+      )
     }
-
-    spinner.stop(`Transaction submitted: ${txHash}`)
 
     log.line('')
     const resultsContent = [
       pc.gray(`Transaction Hash: ${txHash}`),
       pc.gray(`Network: ${network}`),
       pc.gray(`Data Set ID: ${dataSetId}`),
-      pc.gray(`PDP Rail ID: ${updatedDataSet.pdpRailId}`),
+      pc.gray(`PDP Rail ID: ${dataSet.pdpRailId}`),
     ]
     if (dataSet.withCDN && dataSet.cdnRailId > 0) {
       resultsContent.push(pc.gray(`FilBeam Rail ID: ${dataSet.cdnRailId}`))
@@ -278,10 +319,10 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
     log.spinnerSection('Termination Results', resultsContent)
 
     log.line('')
-    log.line(pc.bold('Updated Data Set Status:'))
-    displayDataSets([updatedDataSet], network, address)
+    log.line(pc.bold(shouldWait ? 'Final Data Set Status:' : 'Updated Data Set Status (Pending):'))
+    displayDataSets([dataSet], network, address)
 
-    spinner.stop('Data set termination complete')
+    spinner.stop(shouldWait ? 'Data set termination complete' : 'Termination transaction submitted')
   } catch (error) {
     spinner.stop(`${pc.red('✗')} Failed to terminate data set`)
 
