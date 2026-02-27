@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.17.0](https://github.com/filecoin-project/filecoin-pin/compare/v0.16.0...v0.17.0) (2026-02-23)
+
+
+### Features
+
+* **rm:** add --all option to remove all pieces from DataSet ([#320](https://github.com/filecoin-project/filecoin-pin/issues/320)) ([b27050c](https://github.com/filecoin-project/filecoin-pin/commit/b27050cde026826043c0fd38c6635732aafa7293))
+
+
+### Bug Fixes
+
+* executeUpload and uploadToSynapse to use abortSignals ([#332](https://github.com/filecoin-project/filecoin-pin/issues/332)) ([060257e](https://github.com/filecoin-project/filecoin-pin/commit/060257e0331a416c0e2a1402973c61f16dba03b2))
+
+
+### Chores
+
+* **deps-dev:** bump @biomejs/biome from 2.3.14 to 2.3.15 ([#331](https://github.com/filecoin-project/filecoin-pin/issues/331)) ([6cb403e](https://github.com/filecoin-project/filecoin-pin/commit/6cb403e5d02045e7fa196cee4f9e2c70d71b3409))
+* **deps-dev:** bump @biomejs/biome from 2.3.15 to 2.4.2 ([#336](https://github.com/filecoin-project/filecoin-pin/issues/336)) ([2119892](https://github.com/filecoin-project/filecoin-pin/commit/21198920721fd016b25e2bd93542234458f98869))
+* **deps-dev:** bump @biomejs/biome from 2.4.2 to 2.4.3 ([#337](https://github.com/filecoin-project/filecoin-pin/issues/337)) ([a4b3730](https://github.com/filecoin-project/filecoin-pin/commit/a4b3730fd7faf9a29dcc81021ba7a4dace4052c2))
+* **deps-dev:** bump @biomejs/biome from 2.4.3 to 2.4.4 ([#338](https://github.com/filecoin-project/filecoin-pin/issues/338)) ([5926600](https://github.com/filecoin-project/filecoin-pin/commit/59266007cf2b79914eea81e7897b6108ef30f646))
+
+## [0.16.0](https://github.com/filecoin-project/filecoin-pin/compare/v0.15.1...v0.16.0) (2026-02-07)
+
+
+### Features
+
+* add --data-set and --new-data-set flags to add command ([#296](https://github.com/filecoin-project/filecoin-pin/issues/296)) ([e03719b](https://github.com/filecoin-project/filecoin-pin/commit/e03719b32f74456cf2f71f30d7c5c8e32dfc2ed7))
+* add provider command with info and ping subcommands ([#295](https://github.com/filecoin-project/filecoin-pin/issues/295)) ([c52ebbf](https://github.com/filecoin-project/filecoin-pin/commit/c52ebbff83612c16c4d637e768ccc62ae01bd6b9))
+
+
+### Bug Fixes
+
+* use namespace import for Sentry SDK v8+ ESM compatibility ([#319](https://github.com/filecoin-project/filecoin-pin/issues/319)) ([320a461](https://github.com/filecoin-project/filecoin-pin/commit/320a461f1328d254160af11bae2ef783cc326e2a))
+
+
+### Chores
+
+* **deps-dev:** bump @biomejs/biome from 2.3.13 to 2.3.14 ([#318](https://github.com/filecoin-project/filecoin-pin/issues/318)) ([97f6f1b](https://github.com/filecoin-project/filecoin-pin/commit/97f6f1b3384bbfb616dc053d8683327f910dddc3))
+* **deps:** bump @clack/prompts from 0.11.0 to 1.0.0 ([#315](https://github.com/filecoin-project/filecoin-pin/issues/315)) ([63b34e0](https://github.com/filecoin-project/filecoin-pin/commit/63b34e0030527d6c8534804e895fe79cc729cc1e))
+
 ## [0.15.1](https://github.com/filecoin-project/filecoin-pin/compare/v0.15.0...v0.15.1) (2026-01-29)
 
 
