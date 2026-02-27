@@ -11,6 +11,7 @@ const {
   mockFindDataSets,
   mockGetStorageInfo,
   mockGetAddress,
+  mockWaitForTransaction,
   mockWarmStorageCreate,
   mockWarmStorageInstance,
   mockSynapseCreate,
@@ -31,6 +32,7 @@ const {
   const mockFindDataSets = vi.fn()
   const mockGetStorageInfo = vi.fn()
   const mockGetAddress = vi.fn()
+  const mockWaitForTransaction = vi.fn(async () => ({ status: 1, blockNumber: 96 }))
   const state = {
     leafCount: 0,
     pieceMetadata: {} as Record<string, string>,
@@ -150,7 +152,9 @@ const {
         getStorageInfo: mockGetStorageInfo,
         createContext: mockCreateContext,
       },
-      getProvider: () => ({}),
+      getProvider: () => ({
+        waitForTransaction: mockWaitForTransaction,
+      }),
       getWarmStorageAddress: () => '0xwarm',
     }
   })
@@ -163,6 +167,7 @@ const {
     mockFindDataSets,
     mockGetStorageInfo,
     mockGetAddress,
+    mockWaitForTransaction,
     mockWarmStorageCreate,
     mockWarmStorageInstance,
     mockSynapseCreate,
@@ -278,7 +283,18 @@ describe('runDataSetCommand', () => {
     mockFindDataSets.mockResolvedValue([summaryDataSet])
     mockGetStorageInfo.mockResolvedValue({ providers: [provider] })
     mockGetAddress.mockResolvedValue('0xabc')
+    mockWaitForTransaction.mockResolvedValue({ status: 1, blockNumber: 96 })
     mockWarmStorageInstance.getPieceMetadata.mockResolvedValue({})
+    ;(mockWarmStorageInstance as any).getDataSet = vi.fn(async (dataSetId: number) => ({
+      dataSetId: BigInt(dataSetId),
+      providerId: BigInt(2),
+      payer: '0x123',
+      payee: '0x456',
+      pdpRailId: BigInt(327),
+      cdnRailId: BigInt(0),
+      cacheMissRailId: BigInt(0),
+      commissionBps: 100,
+    }))
   })
 
   afterEach(() => {
@@ -410,7 +426,14 @@ describe('runDataSetCommand', () => {
     mockGetAddress.mockResolvedValue('0x123')
 
     ;(mockWarmStorageInstance as any).getDataSet = vi.fn(async () => ({
+      dataSetId: BigInt(158),
+      providerId: BigInt(2),
       payer: '0x123',
+      payee: '0x456',
+      pdpRailId: BigInt(327),
+      cdnRailId: BigInt(0),
+      cacheMissRailId: BigInt(0),
+      commissionBps: 100,
       pdpEndEpoch: BigInt(123),
     }))
 
@@ -421,10 +444,29 @@ describe('runDataSetCommand', () => {
         privateKey: 'test-key',
         rpcUrl: 'wss://sample',
       })
-    ).rejects.toThrow('Data set is already terminated')
+    ).resolves.toBeUndefined()
 
-    expect(cancelMock).toHaveBeenCalledWith('Termination failed')
     expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining('⚠ Data set already terminated'))
+    expect((mockWarmStorageInstance as any).terminateDataSet).not.toHaveBeenCalled()
+    expect(cancelMock).not.toHaveBeenCalledWith('Termination failed')
     expect(displayDataSetListMock).not.toHaveBeenCalled()
+  })
+
+  it('fails when waited transaction is reverted', async () => {
+    mockGetAddress.mockResolvedValue('0x123')
+
+    ;(mockWarmStorageInstance as any).terminateDataSet = vi.fn(async () => ({ hash: '0xdead', blockNumber: 96 }))
+    mockWaitForTransaction.mockResolvedValue({ status: 0, blockNumber: 96 })
+
+    await expect(
+      runTerminateDataSetCommand(158, {
+        privateKey: 'test-key',
+        rpcUrl: 'wss://sample',
+        wait: true,
+      })
+    ).rejects.toThrow('Termination transaction reverted: 0xdead')
+
+    expect(mockWaitForTransaction).toHaveBeenCalledWith('0xdead')
+    expect(displayDataSetListMock).toHaveBeenCalledTimes(1)
   })
 })

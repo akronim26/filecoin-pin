@@ -188,7 +188,7 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
       }
       log.flush()
       outro('Data set is already terminated')
-      throw new Error('Data set is already terminated')
+      return
     }
 
     spinner.stop('━━━ Data Set to Terminate ━━━')
@@ -217,11 +217,11 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
       })
       if (isCancel(proceed)) {
         cancel('Termination cancelled')
-        throw new Error('Termination cancelled')
+        return
       }
       if (!proceed) {
         cancel('Termination cancelled by user')
-        throw new Error('Termination cancelled by user')
+        return
       }
 
       if (shouldWait === undefined) {
@@ -261,7 +261,13 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
 
       if (shouldWait) {
         spinner.message(`Waiting for confirmation: ${txHash}...`)
-        await provider.waitForTransaction(txHash)
+        const receipt = await provider.waitForTransaction(txHash)
+        if (receipt == null) {
+          throw new Error(`Termination transaction was not confirmed: ${txHash}`)
+        }
+        if (receipt.status == null || Number(receipt.status) !== 1) {
+          throw new Error(`Termination transaction reverted: ${txHash}`)
+        }
         spinner.message('Transaction confirmed, fetching final status...')
         try {
           const finalDataSet = await getDetailedDataSet(synapse, dataSetId)
@@ -274,7 +280,7 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
           dataSet = {
             ...dataSet,
             isLive: false,
-            pdpEndEpoch: txResponse.blockNumber != null ? Math.ceil(txResponse.blockNumber / 32) : 0,
+            pdpEndEpoch: receipt.blockNumber != null ? Math.ceil(receipt.blockNumber / 32) : 0,
           }
         }
       } else {
