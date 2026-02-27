@@ -409,12 +409,10 @@ describe('runDataSetCommand', () => {
   it('reports already terminated when pdpEndEpoch > 0', async () => {
     mockGetAddress.mockResolvedValue('0x123')
 
-    mockFindDataSets.mockResolvedValue([
-      {
-        ...summaryDataSet,
-        pdpEndEpoch: 123,
-      },
-    ])
+    ;(mockWarmStorageInstance as any).getDataSet = vi.fn(async () => ({
+      payer: '0x123',
+      pdpEndEpoch: BigInt(123),
+    }))
 
     ;(mockWarmStorageInstance as any).terminateDataSet = vi.fn(async () => ({ hash: '0xdead', blockNumber: 196 }))
 
@@ -424,5 +422,9 @@ describe('runDataSetCommand', () => {
         rpcUrl: 'wss://sample',
       })
     ).rejects.toThrow('Data set is already terminated')
+
+    expect(cancelMock).toHaveBeenCalledWith('Termination failed')
+    expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining('⚠ Data set already terminated'))
+    expect(displayDataSetListMock).not.toHaveBeenCalled()
   })
 })
