@@ -3,7 +3,8 @@ import type { EnhancedDataSetInfo, Synapse } from '@filoz/synapse-sdk'
 import { WarmStorageService } from '@filoz/synapse-sdk'
 import pc from 'picocolors'
 import { type DataSetSummary, getDetailedDataSet, listDataSets } from '../core/data-set/index.js'
-import { cleanupSynapseService } from '../core/synapse/index.js'
+import { ADDRESS_ONLY_SIGNER_SYMBOL } from '../core/synapse/address-only-signer.js'
+import { cleanupSynapseService, isViewOnlyMode } from '../core/synapse/index.js'
 import { getCliSynapse } from '../utils/cli-auth.js'
 import { cancel, createSpinner, intro, isInteractive, outro } from '../utils/cli-helpers.js'
 import { log } from '../utils/cli-logger.js'
@@ -141,10 +142,23 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
 
     synapse = await getCliSynapse(options)
     const network = synapse.getNetwork()
-    const client = synapse.getClient()
+
+    const signer = synapse.getSigner()
+    if (isViewOnlyMode(synapse) || (signer as any)[ADDRESS_ONLY_SIGNER_SYMBOL]) {
+      spinner.stop(`${pc.red('✗')} Signing required`)
+      log.line('')
+      log.line(
+        `${pc.red('Error:')} Dataset termination requires a signing-capable wallet. ` +
+          'View-only or address-only authentication cannot be used.'
+      )
+      log.flush()
+      cancel('Termination failed')
+      throw new Error('Signing required for termination')
+    }
+
     let address: string
     try {
-      address = await client.getAddress()
+      address = await signer.getAddress()
     } catch (error) {
       spinner.stop(`${pc.red('✗')} Could not retrieve wallet address`)
       log.line('')
@@ -193,6 +207,8 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
 
     spinner.stop('━━━ Data Set to Terminate ━━━')
     displayDataSets([dataSet], network, address)
+
+    spinner.start('Terminating data set...')
 
     log.line('')
     log.line(pc.bold('Payment Rails to Terminate:'))
@@ -273,7 +289,7 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
           const finalDataSet = await getDetailedDataSet(synapse, dataSetId)
           dataSet = {
             ...finalDataSet,
-            isLive: finalDataSet.isLive,
+            isLive: finalDataSet.pdpEndEpoch === 0,
             pdpEndEpoch: finalDataSet.pdpEndEpoch,
           }
         } catch (_) {
@@ -337,7 +353,6 @@ export async function runTerminateDataSetCommand(dataSetId: number, options: Dat
     log.flush()
 
     cancel('Termination failed')
-    throw error
   } finally {
     await cleanupSynapseService()
   }

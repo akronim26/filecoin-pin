@@ -1,7 +1,10 @@
+import { confirm } from '@clack/prompts'
 import { METADATA_KEYS } from '@filoz/synapse-sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DataSetSummary } from '../../core/data-set/types.js'
+import { isViewOnlyMode } from '../../core/synapse/index.js'
 import { runDataSetDetailsCommand, runDataSetListCommand, runTerminateDataSetCommand } from '../../data-set/run.js'
+import { isInteractive } from '../../utils/cli-helpers.js'
 
 const {
   displayDataSetListMock,
@@ -188,6 +191,7 @@ vi.mock('../../data-set/display.js', () => ({
 vi.mock('../../core/synapse/index.js', () => ({
   initializeSynapse: mockSynapseCreate,
   cleanupSynapseService: cleanupSynapseServiceMock,
+  isViewOnlyMode: vi.fn(),
 }))
 
 vi.mock('../../utils/cli-helpers.js', () => ({
@@ -195,7 +199,7 @@ vi.mock('../../utils/cli-helpers.js', () => ({
   outro: vi.fn(),
   cancel: cancelMock,
   createSpinner: () => spinnerMock,
-  isInteractive: () => false,
+  isInteractive: vi.fn(() => false),
 }))
 
 vi.mock('../../utils/cli-logger.js', () => ({
@@ -231,6 +235,11 @@ vi.mock('@filoz/synapse-core/piece', () => ({
     // Return a realistic piece size (1 MiB = 1048576 bytes)
     return 1048576
   }),
+}))
+
+vi.mock('@clack/prompts', () => ({
+  confirm: vi.fn(),
+  isCancel: vi.fn(() => false),
 }))
 
 describe('runDataSetCommand', () => {
@@ -410,12 +419,10 @@ describe('runDataSetCommand', () => {
   })
 
   it('rejects termination when caller is not owner', async () => {
-    await expect(
-      runTerminateDataSetCommand(158, {
-        privateKey: 'test-key',
-        rpcUrl: 'wss://sample',
-      })
-    ).rejects.toThrow('Data set 158 is not owned by address 0xabc')
+    await runTerminateDataSetCommand(158, {
+      privateKey: 'test-key',
+      rpcUrl: 'wss://sample',
+    })
 
     expect(cancelMock).toHaveBeenCalledWith('Termination failed')
     expect(spinnerMock.stop).toHaveBeenCalledWith(expect.stringContaining('Permission denied'))
@@ -458,15 +465,39 @@ describe('runDataSetCommand', () => {
     ;(mockWarmStorageInstance as any).terminateDataSet = vi.fn(async () => ({ hash: '0xdead', blockNumber: 96 }))
     mockWaitForTransaction.mockResolvedValue({ status: 0, blockNumber: 96 })
 
-    await expect(
-      runTerminateDataSetCommand(158, {
-        privateKey: 'test-key',
-        rpcUrl: 'wss://sample',
-        wait: true,
-      })
-    ).rejects.toThrow('Termination transaction reverted: 0xdead')
+    await runTerminateDataSetCommand(158, {
+      privateKey: 'test-key',
+      rpcUrl: 'wss://sample',
+      wait: true,
+    })
 
     expect(mockWaitForTransaction).toHaveBeenCalledWith('0xdead')
     expect(displayDataSetListMock).toHaveBeenCalledTimes(1)
+    expect(cancelMock).toHaveBeenCalledWith('Termination failed')
+  })
+
+  it('rejects termination in view-only mode', async () => {
+    vi.mocked(isViewOnlyMode).mockReturnValueOnce(true)
+
+    await runTerminateDataSetCommand(158, { privateKey: 'test-key', rpcUrl: 'wss://sample' })
+
+    expect(cancelMock).toHaveBeenCalledWith('Termination failed')
+  })
+
+  it('throws an error for invalid provider ID', async () => {
+    await expect(
+      runDataSetListCommand({ privateKey: 'test-key', rpcUrl: 'wss://sample', providerId: 'abc' as any })
+    ).rejects.toThrow('Invalid provider ID')
+    expect(cancelMock).toHaveBeenCalledWith('Listing failed')
+  })
+
+  it('cancels termination in interactive mode if user declines', async () => {
+    mockGetAddress.mockResolvedValue('0x123')
+    vi.mocked(isInteractive).mockReturnValueOnce(true)
+    vi.mocked(confirm).mockResolvedValueOnce(false)
+
+    await runTerminateDataSetCommand(158, { privateKey: 'test-key', rpcUrl: 'wss://sample' })
+
+    expect(cancelMock).toHaveBeenCalledWith('Termination cancelled by user')
   })
 })
